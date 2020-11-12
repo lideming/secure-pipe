@@ -1,6 +1,10 @@
 export const config = {
     listen: '127.0.0.1:5005',
+
     behindProxy: false,
+    overrideProto: 'https:',
+    overrideBaseUrl: '',
+
     verbose: false,
 
     welcomeMessage: (baseUrl: string, generatedName: string) => `

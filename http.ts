@@ -33,7 +33,8 @@ export class HttpServer {
         this.router
             .get('/', (ctx) => {
                 ctx.respond = true;
-                const baseUrl = ctx.request.url.protocol + '//' + ctx.request.url.host;
+                const baseUrl = config.overrideBaseUrl ||
+                    ((config.overrideProto || ctx.request.url.protocol) + '//' + ctx.request.url.host);
                 ctx.response.body = config.welcomeMessage(baseUrl, randomName(10));
             })
             .put('/:pipe', this.writerHandler)
