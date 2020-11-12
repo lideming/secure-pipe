@@ -8,25 +8,19 @@ export class Pipe implements Deno.Reader {
     private writingBuf?: Uint8Array = undefined;
 
     private state: "open" | "closed" = "open";
-    private eofAcked = false;
+    private eofAcked = 0;
 
     constructor(readonly name: string) {
     }
 
     async copyFromReader(reader: Deno.Reader) {
-        try {
-            const buf = new Uint8Array(32768);
-            while (true) {
-                const nread = await reader.read(buf);
-                if (!nread) {
-                    break;
-                }
-                await this.write(buf.subarray(0, nread));
+        const buf = new Uint8Array(32768);
+        while (true) {
+            const nread = await reader.read(buf);
+            if (!nread) {
+                break;
             }
-        } catch (error) {
-            console.warn("pipe reader", error);
-        } finally {
-            this.close();
+            await this.write(nread == buf.byteLength ? buf : buf.subarray(0, nread));
         }
     }
 
@@ -88,10 +82,9 @@ export class Pipe implements Deno.Reader {
     }
 
     private eofOrThrow(): null | never {
-        if (this.eofAcked) {
+        if (this.eofAcked++ > 10) {
             throw new Error("Pipe closed");
         }
-        this.eofAcked = true;
         return null;
     }
 
