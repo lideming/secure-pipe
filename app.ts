@@ -8,9 +8,8 @@ export class PipeService {
     private readonly pipes = new Map<string, Pipe>();
 
 
-    getPipe(name: string, allowCreate: false): Pipe | null;
-    getPipe(name: string, allowCreate?: true): Pipe;
-    getPipe(name: string, allowCreate = true) {
+    getPipe(name: string, allowCreate = true): Pipe | null {
+        if (!PipeService.isValidName(name)) return null;
         let pipe = this.pipes.get(name);
         if (!pipe && allowCreate) {
             pipe = new Pipe(name);
@@ -21,5 +20,9 @@ export class PipeService {
 
     removePipe(name: string) {
         return this.pipes.delete(name);
+    }
+
+    static isValidName(name: string) {
+        return name.length > 0 && /[a-zA-Z]/.test(name[0]);
     }
 }

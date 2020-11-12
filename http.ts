@@ -3,6 +3,9 @@ import { randomName } from "./util.ts";
 import { App } from "./app.ts"
 import { config } from "./config.ts";
 
+class NormalError extends Error {
+}
+
 export class HttpServer {
     oak = new Application({ proxy: config.behindProxy });
     router = new Router();
@@ -26,6 +29,21 @@ export class HttpServer {
                 await next();
             });
         }
+        this.oak.use(async (ctx, next) => {
+            try {
+                await next();
+            } catch (error) {
+                if (error instanceof NormalError) {
+                    console.log("warning: " + error.message);
+                    ctx.respond = true;
+                    ctx.response.status = Status.BadRequest;
+                    ctx.response.type = "text";
+                    ctx.response.body = error.toString();
+                } else {
+                    throw error;
+                }
+            }
+        })
         this.oak.use(this.router.routes());
     }
 
@@ -38,15 +56,17 @@ export class HttpServer {
                 ctx.response.body = config.welcomeMessage(baseUrl, randomName(10));
             })
             .put('/:pipe', this.writerHandler)
+            .post('/:pipe', this.writerHandler)
             .get('/:pipe', this.readerHandler)
     }
 
     writerHandler = async (ctx: RouterContext) => {
         const pipeName = ctx.params.pipe;
-        if (!pipeName) throw new Error("No pipe name");
+        if (!pipeName) throw new NormalError("No pipe name");
+        const pipe = this.app.pipes.getPipe(pipeName);
+        if (!pipe) throw new NormalError("Can not get the specified pipe");
 
         ctx.respond = true;
-        const pipe = this.app.pipes.getPipe(pipeName);
         try {
             const reader = await ctx.request.body({ type: "reader" }).value;
             await pipe.copyFromReader(reader);
@@ -64,8 +84,9 @@ export class HttpServer {
 
     readerHandler = async (ctx: RouterContext) => {
         const pipeName = ctx.params.pipe;
-        if (!pipeName) throw new Error("No pipe name");
+        if (!pipeName) throw new NormalError("No pipe name");
         const pipe = this.app.pipes.getPipe(pipeName);
+        if (!pipe) throw new NormalError("Can not get the specified pipe");
 
         ctx.respond = true;
         ctx.response.type = "raw";
