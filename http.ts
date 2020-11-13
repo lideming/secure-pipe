@@ -74,11 +74,11 @@ export class HttpServer {
             ctx.response.body = { status: ctx.response.status };
         } catch (error) {
             config.verbose && console.warn("pipe writer", error);
-            ctx.request.serverRequest.conn.close();
-            // (https://github.com/denoland/deno/issues/8364)
             // throw error;
         } finally {
             pipe.close();
+            ctx.request.serverRequest.conn.close();
+            // (https://github.com/denoland/deno/issues/8364)
         }
     };
 
