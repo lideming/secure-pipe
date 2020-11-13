@@ -14,7 +14,7 @@ export class Pipe {
         return this._stream;
     }
 
-    private _state: "none" | "no-reader" | "no-writer" | "connectted" = "none";
+    private _state: "none" | "no-reader" | "no-writer" | "connectted" | "closed" = "none";
     get state() { return this._state; }
 
     get transferred() { return this._stream?.transferred ?? 0; }
@@ -30,7 +30,9 @@ export class Pipe {
     }
 
     connect(isReader: boolean) {
-        if (this._state == "connectted") {
+        if (this._state == "closed") {
+            throw new PipeError("The pipe is closed");
+        } else if (this._state == "connectted") {
             throw new PipeError("The pipe is already connectted");
         } else if (isReader) {
             if (this._state == "no-writer") {
@@ -55,9 +57,15 @@ export class Pipe {
         return this._whenConnectted;
     }
 
-    close() {
-        this.stream.close();
+    close(reason?: string) {
+        if (this._state == "closed") return;
         this.service.removePipe(this.name);
+        if (this._state == "connectted") {
+            this.stream.close();
+        } else {
+            this._whenConnectted.reject(new PipeError(reason ? "Pipe closed: " + reason : "Pipe closed"));
+        }
+        this._state = "closed";
     }
 }
 
