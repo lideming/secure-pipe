@@ -77,7 +77,7 @@ export class HttpServer {
             // throw error;
         } finally {
             pipe.close();
-            ctx.request.serverRequest.conn.close();
+            // ctx.request.serverRequest.conn.close();
             // (https://github.com/denoland/deno/issues/8364)
         }
     };
