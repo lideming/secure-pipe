@@ -10,6 +10,12 @@ export function randomName(len: number) {
     return randomString(letters, 1) + randomString(lettersAndDigits, len - 1);
 }
 
+const encoer = new TextEncoder();
+
+export function encode(str: string) {
+    return encoer.encode(str);
+}
+
 export function randomString(chars: string, len: number) {
     let str = '';
     while (len-- > 0) {
