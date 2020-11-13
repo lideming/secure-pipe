@@ -2,9 +2,7 @@ import { Application, Router, RouterContext, Status } from "./deps.ts";
 import { randomName } from "./util.ts";
 import { App } from "./app.ts"
 import { config } from "./config.ts";
-
-class NormalError extends Error {
-}
+import { NormalError, PipeError } from "./errors.ts";
 
 export class HttpServer {
     oak = new Application({ proxy: config.behindProxy });
@@ -66,36 +64,49 @@ export class HttpServer {
         const pipe = this.app.pipes.getPipe(pipeName);
         if (!pipe) throw new NormalError("Can not get the specified pipe");
 
-        ctx.respond = true;
+        const pipeStream = await pipe.connectWriter();
+
         try {
             const reader = await ctx.request.body({ type: "reader" }).value;
-            await pipe.copyFromReader(reader);
+            await pipeStream.copyFromReader(reader);
+            ctx.respond = true;
             ctx.response.status = Status.OK;
             ctx.response.body = { status: ctx.response.status };
         } catch (error) {
             config.verbose && console.warn("pipe writer", error);
-            // (issue in oak or std?) The server will stuck without this line:
             ctx.request.serverRequest.conn.close();
+            // (https://github.com/denoland/deno/issues/8364)
+            // throw error;
         } finally {
-            if (pipe.close())
-                this.app.pipes.removePipe(pipeName);
+            pipe.close();
         }
     };
 
     readerHandler = async (ctx: RouterContext) => {
         const pipeName = ctx.params.pipe;
         if (!pipeName) throw new NormalError("No pipe name");
-        const pipe = this.app.pipes.getPipe(pipeName);
-        if (!pipe) throw new NormalError("Can not get the specified pipe");
 
-        ctx.respond = true;
-        ctx.response.type = "raw";
-        ctx.response.body = pipe;
-        try {
-            await ctx.request.serverRequest.respond(await ctx.response.toServerResponse());
-        } finally {
-            if (pipe.close())
-                this.app.pipes.removePipe(pipeName);
+        const action = ctx.request.url.searchParams.get("action");
+        if (action == "status") {
+            ctx.respond = true;
+            ctx.response.type = "json";
+            ctx.response.body = this.app.pipes.getPipeStatus(pipeName);
+        } else if (action == null) {
+            const pipe = this.app.pipes.getPipe(pipeName);
+            if (!pipe) throw new NormalError("Can not get the specified pipe");
+
+            const stream = await pipe.connectReader();
+
+            try {
+                ctx.respond = true;
+                ctx.response.type = "raw";
+                ctx.response.body = stream;
+                await ctx.request.serverRequest.respond(await ctx.response.toServerResponse());
+            } finally {
+                pipe.close();
+            }
+        } else {
+            throw new NormalError("Unknown action param value");
         }
     };
 

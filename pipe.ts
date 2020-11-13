@@ -1,7 +1,67 @@
+import { PipeService } from "./app.ts";
 import { config } from "./config.ts";
 import { deferred, Deferred } from "./deps.ts";
+import { PipeError } from "./errors.ts";
 
-export class Pipe implements Deno.Reader {
+
+export class Pipe {
+    constructor(readonly service: PipeService, readonly name: string) {
+    }
+
+    private _stream?: LoopbackStream = undefined;
+    get stream() {
+        if (!this._stream) this._stream = new LoopbackStream();
+        return this._stream;
+    }
+
+    private _state: "none" | "no-reader" | "no-writer" | "connectted" = "none";
+    get state() { return this._state; }
+
+    get transferred() { return this._stream?.transferred ?? 0; }
+
+    private _whenConnectted = deferred<LoopbackStream>();
+
+    connectWriter() {
+        return this.connect(false);
+    }
+
+    connectReader() {
+        return this.connect(true);
+    }
+
+    connect(isReader: boolean) {
+        if (this._state == "connectted") {
+            throw new PipeError("The pipe is already connectted");
+        } else if (isReader) {
+            if (this._state == "no-writer") {
+                throw new PipeError("The pipe reader is already connectted");
+            } else if (this._state == "no-reader") {
+                this._state = "connectted";
+            } else {
+                this._state = "no-writer";
+            }
+        } else { // is writer
+            if (this._state == "no-reader") {
+                throw new PipeError("The pipe writer is already connectted");
+            } else if (this._state == "no-writer") {
+                this._state = "connectted";
+            } else {
+                this._state = "no-reader";
+            }
+        }
+        if (this._state == "connectted") {
+            this._whenConnectted.resolve(this.stream);
+        }
+        return this._whenConnectted;
+    }
+
+    close() {
+        this.stream.close();
+        this.service.removePipe(this.name);
+    }
+}
+
+export class LoopbackStream implements Deno.Reader {
     private reading?: Deferred<Uint8Array | null> = undefined;
 
     private writing?: Deferred<void> = undefined;
@@ -10,8 +70,8 @@ export class Pipe implements Deno.Reader {
     private state: "open" | "closed" = "open";
     private eofAcked = 0;
 
-    constructor(readonly name: string) {
-    }
+    private _transferred = 0;
+    get transferred() { return this._transferred; }
 
     async copyFromReader(reader: Deno.Reader) {
         const buf = new Uint8Array(32768);
@@ -26,10 +86,11 @@ export class Pipe implements Deno.Reader {
 
     write(buf: Uint8Array) {
         config.verbose && console.debug("pipe write begin", buf.byteLength);
-        if (this.state == "closed") throw new Error("Pipe closed");
+        if (this.state == "closed") throw new PipeError("Pipe closed");
         this.writing = deferred();
         config.verbose && this.writing.then(r => console.debug("pipe write end"));
         this.writingBuf = buf;
+        this._transferred += buf.byteLength;
         if (this.reading) {
             this.reading.resolve(buf);
             this.reading = undefined;
@@ -83,7 +144,7 @@ export class Pipe implements Deno.Reader {
 
     private eofOrThrow(): null | never {
         if (this.eofAcked++ > 10) {
-            throw new Error("Pipe closed");
+            throw new PipeError("Pipe closed");
         }
         return null;
     }
@@ -101,7 +162,7 @@ export class Pipe implements Deno.Reader {
             this.reading = undefined;
         }
         if (this.writing) {
-            this.writing!.reject("Pipe closed");
+            this.writing!.reject(new PipeError("Pipe closed"));
         }
         this.reading = undefined;
         this.writing = this.writingBuf = undefined;
