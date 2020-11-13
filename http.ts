@@ -95,14 +95,30 @@ export class HttpServer {
 
     private async handleWritePipe(pipe: Pipe, ctx: RouterContext) {
         const connecting = pipe.connectWriter();
-        const feedback = await this.createFeedbackStream(ctx);
-        if (pipe.state != "connectted") {
-            await feedback.write("Waiting for reader...");
-        }
-        const stream = await connecting;
-        await feedback.write("Connectted.");
-
+        let feedback: FeedbackStream | null = null;
         try {
+            feedback = await this.createFeedbackStream(ctx);
+            let stream: LoopbackStream;
+            if (pipe.state != "connectted") {
+                await feedback.write("Waiting for reader", false);
+                (async () => {
+                    while (true) {
+                        await new Promise(r => setTimeout(r, 5000));
+                        if (pipe.state != "no-reader") break;
+                        try {
+                            await feedback!.write(".", false);
+                        } catch (error) {
+                            pipe.close();
+                        }
+                    }
+                })();
+                stream = await connecting;
+                await feedback.write("\r\nConnectted.");
+            } else {
+                stream = await connecting;
+                await feedback.write("Connectted.");
+            }
+
             const reader = await ctx.request.body({ type: "reader" }).value;
             try {
                 await stream.copyFromReader(reader);
@@ -118,7 +134,7 @@ export class HttpServer {
             config.verbose && console.warn("pipe writer", error);
             // throw error;
         } finally {
-            feedback.stream.close();
+            feedback?.stream.close();
             pipe.close();
             // ctx.request.serverRequest.conn.close();
             // (https://github.com/denoland/deno/issues/8364)
@@ -139,17 +155,21 @@ export class HttpServer {
     }
 
     private async createFeedbackStream(ctx: RouterContext<Record<string | number, string | undefined>, Record<string, any>>) {
-        const feedbackStream = new LoopbackStream();
+        const stream = new LoopbackStream();
         ctx.respond = true;
         ctx.response.status = Status.OK;
         ctx.response.type = "raw";
-        ctx.response.body = feedbackStream;
+        ctx.response.body = stream;
         ctx.request.serverRequest.respond(await ctx.response.toServerResponse()).catch(e => {
-            feedbackStream.close();
+            stream.close();
         });
-        return {
-            stream: feedbackStream,
-            write: (text: string) => feedbackStream.write(encode(text + '\r\n'))
-        };
+        return new FeedbackStream(stream);
+    }
+}
+
+class FeedbackStream {
+    constructor(readonly stream: LoopbackStream) { }
+    write(text: string, newLine = true) {
+        return this.stream.write(encode(text + (newLine ? '\r\n' : '')))
     }
 }
