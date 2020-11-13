@@ -112,25 +112,12 @@ export class LoopbackStream implements Deno.Reader {
 
     private _read(p?: Uint8Array): Promise<Uint8Array | number | null> {
         if (p) {
-            if (this.state != "open") {
-                return Promise.resolve(this.eofOrThrow());
+            if (this.state != "open" || this.writing) {
+                return Promise.resolve(this._readAvailableIntoBuf(p));
             }
-            return (async () => {
-                if (!this.writing) {
-                    await (this.reading = deferred());
-                }
-                if (this.state != "open") return this.eofOrThrow();
-
-                let len = Math.min(this.writingBuf!.byteLength, p.byteLength);
-                if (len === this.writingBuf!.byteLength) {
-                    p.set(this.writingBuf!);
-                    this.endRead();
-                } else {
-                    p.set(this.writingBuf!.subarray(0, len));
-                    this.writingBuf = this.writingBuf!.subarray(len);
-                }
-                return len;
-            })();
+            return (this.reading = deferred()).then(() => {
+                return this._readAvailableIntoBuf(p);
+            });
         }
 
         if (this.state != "open") return Promise.resolve(this.eofOrThrow());
@@ -140,6 +127,20 @@ export class LoopbackStream implements Deno.Reader {
         } else {
             return (this.reading = deferred());
         }
+    }
+
+    private _readAvailableIntoBuf(p: Uint8Array) {
+        if (this.state != "open") return this.eofOrThrow();
+
+        let len = Math.min(this.writingBuf!.byteLength, p.byteLength);
+        if (len === this.writingBuf!.byteLength) {
+            p.set(this.writingBuf!);
+            this.endRead();
+        } else {
+            p.set(this.writingBuf!.subarray(0, len));
+            this.writingBuf = this.writingBuf!.subarray(len);
+        }
+        return len;
     }
 
     private eofOrThrow(): null | never {
