@@ -120,6 +120,7 @@ export class HttpServer {
             }
 
             const reader = await ctx.request.body({ type: "reader" }).value;
+            // TODO: handle form-data
             try {
                 await stream.copyFromReader(reader);
             } catch (error) {

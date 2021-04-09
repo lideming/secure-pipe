@@ -1,0 +1,14 @@
+{
+  "name": "@yuuza/pipe-web",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "build": "webbuild"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@yuuza/webfx": "^1.6.2",
+    "tslib": "^2.2.0"
+  }
+}

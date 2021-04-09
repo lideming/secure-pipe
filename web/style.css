@@ -1,0 +1,37 @@
+* {
+    box-sizing: border-box;
+}
+
+html {
+    font-family: sans-serif;
+}
+
+.app {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+#title {
+    font-size: 50px;
+    text-align: center;
+}
+
+#pipe-action-btns {
+    margin: .5em 0;
+    text-align: center;
+}
+
+.btn-group .btn {
+    display: inline-block;
+}
+
+#pipe-action-btns .btn {
+    margin: 0 2em;
+    padding: .2em;
+    min-width: 7em;
+}
+
+#pipe-action-btns .btn-group {
+    display: inline-block;
+    
+}
