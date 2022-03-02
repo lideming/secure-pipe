@@ -93,7 +93,7 @@ export class HttpServer {
             })
     }
 
-    private async handleWritePipe(pipe: Pipe, ctx: RouterContext) {
+    private async handleWritePipe(pipe: Pipe, ctx: RouterContext<any, any, any>) {
         const connecting = pipe.connectWriter();
         let feedback: FeedbackStream | null = null;
         try {
@@ -106,7 +106,7 @@ export class HttpServer {
                         await new Promise(r => setTimeout(r, 5000));
                         if (pipe.state != "no-reader") break;
                         try {
-                            await feedback!.write(".", false);
+                            await feedback.write(".", false);
                         } catch (error) {
                             pipe.close();
                         }
@@ -142,26 +142,26 @@ export class HttpServer {
         }
     }
 
-    private async handleReadPipe(pipe: Pipe, ctx: RouterContext) {
+    private async handleReadPipe(pipe: Pipe, ctx: RouterContext<any, any, any>) {
         const stream = await pipe.connectReader();
 
         try {
-            ctx.respond = true;
+            ctx.respond = false;
             ctx.response.type = "raw";
             ctx.response.body = stream;
-            await ctx.request.serverRequest.respond(await ctx.response.toServerResponse());
+            await ctx.request.originalRequest.respond(await ctx.response.toDomResponse());
         } finally {
             pipe.close();
         }
     }
 
-    private async createFeedbackStream(ctx: RouterContext<Record<string | number, string | undefined>, Record<string, any>>) {
+    private async createFeedbackStream(ctx: RouterContext<any, any, any>) {
         const stream = new LoopbackStream();
-        ctx.respond = true;
+        ctx.respond = false;
         ctx.response.status = Status.OK;
         ctx.response.type = "raw";
         ctx.response.body = stream;
-        ctx.request.serverRequest.respond(await ctx.response.toServerResponse()).catch(e => {
+        ctx.request.originalRequest.respond(await ctx.response.toDomResponse()).catch(e => {
             stream.close();
         });
         return new FeedbackStream(stream);

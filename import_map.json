@@ -1,5 +1,0 @@
-{
-    "imports": {
-        "https://deno.land/std@0.77.0/": "https://raw.githubusercontent.com/lideming/deno/dev/std/"
-    }
-}
